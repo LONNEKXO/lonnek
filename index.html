@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LONNEKXO — socials</title>
+  <title>LONNEKXO</title>
   <style>
     :root {
       --bg-1: #06030d;
@@ -393,6 +393,63 @@
       transition: transform .35s ease, box-shadow .35s ease;
     }
 
+
+    .live-pill {
+      position: relative;
+      overflow: hidden;
+      min-height: 44px;
+      max-width: min(100%, 760px);
+    }
+
+    .live-pill::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 25%, transparent 50%);
+      transform: translateX(-140%);
+      transition: transform .6s ease;
+      pointer-events: none;
+    }
+
+    .live-pill.online::after {
+      transform: translateX(140%);
+    }
+
+    .live-pill .live-meta {
+      margin-left: 2px;
+      padding-left: 10px;
+      border-left: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.9);
+      white-space: nowrap;
+      max-width: min(58vw, 620px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .live-pill.offline {
+      pointer-events: none;
+      cursor: default;
+    }
+
+    .live-pill.online {
+      cursor: pointer;
+    }
+
+    .live-pill.online:hover {
+      transform: translateY(-2px) scale(1.01);
+      box-shadow: 0 0 28px rgba(87,255,178,0.18), 0 0 70px rgba(87,255,178,0.10);
+    }
+
+    .live-pill.going-live {
+      animation: livePop .7s ease;
+    }
+
+    @keyframes livePop {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.07); }
+      100% { transform: scale(1); }
+    }
+
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(87,255,178,0.72); }
       70% { box-shadow: 0 0 0 12px rgba(87,255,178,0); }
@@ -446,6 +503,17 @@
       .social-card.featured { flex-direction: column; }
       .hero-card, .social-card, .partner-card { border-radius: 22px; }
       .hero-card { padding: 20px; }
+      .live-pill {
+        max-width: 100%;
+        white-space: normal;
+        justify-content: center;
+      }
+      .live-pill .live-meta {
+        max-width: 100%;
+        white-space: normal;
+        border-left: 0;
+        padding-left: 0;
+      }
     }
   
 .team-grid {
@@ -527,7 +595,11 @@
       <div class="hero-main">
         <div class="title-row">
           <h1>LONNEKXO</h1>
-          <div class="live-pill offline" id="liveStatus" data-state="offline" aria-live="polite"><span class="live-dot"></span><span id="liveStatusText">OFFLINE</span></div>
+          <a href="https://www.twitch.tv/lonnek" class="live-pill offline" id="liveStatus" data-state="offline" aria-live="polite" target="_blank" rel="noopener noreferrer" aria-label="Status Twitch">
+            <span class="live-dot"></span>
+            <span id="liveStatusText">OFFLINE</span>
+            <span class="live-meta" id="liveMeta" hidden></span>
+          </a>
         </div>
         <p class="subline">Streamer, creator i totalny chaos kontrolowany ✦ szybkie linki, streamy i vibe premium bez dziwnych potworków w layoucie.</p>
         <div class="hero-actions">
@@ -625,30 +697,74 @@
     const root = document.documentElement;
     const liveStatus = document.getElementById('liveStatus');
     const liveStatusText = document.getElementById('liveStatusText');
+    const liveMeta = document.getElementById('liveMeta');
     const cursorGlow = document.querySelector('.cursor-glow');
     const particles = document.getElementById('particles');
 
-const TWITCH_CONFIG = {
-  endpoint: 'https://twitch-live-status2.vercel.app/api/twitch-status?login=lonnek',
-  refreshMs: 30000
-};
+    const TWITCH_CONFIG = {
+      endpoint: 'https://twitch-live-status2.vercel.app/api/twitch-status?login=lonnek',
+      refreshMs: 30000
+    };
 
-    function setLiveState(isOnline) {
+    function truncateText(text, maxLength = 68) {
+      if (!text) return '';
+      return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+    }
+
+    function setLiveState(data = {}) {
+      const isOnline = Boolean(data?.live);
+      const wasOnline = liveStatus.dataset.state === 'online';
+
       liveStatus.classList.toggle('online', isOnline);
       liveStatus.classList.toggle('offline', !isOnline);
       liveStatus.dataset.state = isOnline ? 'online' : 'offline';
       liveStatusText.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+
+      if (isOnline && !wasOnline) {
+        liveStatus.classList.remove('going-live');
+        void liveStatus.offsetWidth;
+        liveStatus.classList.add('going-live');
+      }
+
+      if (isOnline) {
+        const viewers = Number(data?.viewers || 0);
+        const game = data?.game ? `🎮 ${data.game}` : '';
+        const title = data?.title ? `🎥 ${truncateText(data.title)}` : '';
+        const bits = [
+          viewers > 0 ? `${viewers} viewers` : null,
+          game,
+          title
+        ].filter(Boolean);
+
+        liveMeta.hidden = bits.length === 0;
+        liveMeta.textContent = bits.join(' • ');
+        liveStatus.href = 'https://www.twitch.tv/lonnek';
+        liveStatus.target = '_blank';
+        liveStatus.rel = 'noopener noreferrer';
+        liveStatus.setAttribute('aria-label', 'LONNEK jest teraz live na Twitchu');
+      } else {
+        liveMeta.hidden = true;
+        liveMeta.textContent = '';
+        liveStatus.removeAttribute('href');
+        liveStatus.removeAttribute('target');
+        liveStatus.removeAttribute('rel');
+        liveStatus.setAttribute('aria-label', 'LONNEK jest teraz offline na Twitchu');
+      }
     }
 
     async function updateTwitchStatus() {
       try {
-        const response = await fetch(TWITCH_CONFIG.endpoint, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+        const response = await fetch(TWITCH_CONFIG.endpoint, {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
+        });
+
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        setLiveState(Boolean(data?.live));
+        setLiveState(data);
       } catch (error) {
         console.warn('Nie udało się pobrać statusu Twitch:', error);
-        setLiveState(false);
+        setLiveState({ live: false });
       }
     }
 
@@ -676,7 +792,9 @@ const TWITCH_CONFIG = {
       const my = `${(e.clientY / window.innerHeight) * 100}%`;
       root.style.setProperty('--mx', mx);
       root.style.setProperty('--my', my);
-      if (cursorGlow) cursorGlow.style.background = `radial-gradient(circle at ${mx} ${my}, rgba(124,58,237,0.12), transparent 180px)`;
+      if (cursorGlow) {
+        cursorGlow.style.background = `radial-gradient(circle at ${mx} ${my}, rgba(124,58,237,0.12), transparent 180px)`;
+      }
     });
   </script>
 </body>
